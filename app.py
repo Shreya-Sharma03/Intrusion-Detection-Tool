@@ -2,51 +2,52 @@ import streamlit as st
 import pandas as pd
 import pickle
 
-# Load the model and encoders
-model = pickle.load(open("model.pkl", "rb"))
-scaler = pickle.load(open("scaler.pkl", "rb"))
-label_encoders = pickle.load(open("label_encoders.pkl", "rb"))
+# Load models
+model = pickle.load(open('model.pkl', 'rb'))
+scaler = pickle.load(open('scaler.pkl', 'rb'))
+label_encoders = pickle.load(open('label_encoders.pkl', 'rb'))
 
-st.title(" Intrusion Detection Tool")
-st.write("Predict whether a network activity is **normal** or an **attack** based on input features.")
+st.title("Intrusion Detection")
 
-# Input form
-with st.form("prediction_form"):
-    duration = st.number_input("Duration", min_value=0)
-    protocol_type = st.selectbox("Protocol Type", label_encoders["protocol_type"].classes_)
+# Input widgets
+network_packet_size = st.number_input("Packet Size", 500)
+protocol_type = st.selectbox("Protocol Type", ["TCP", "UDP", "ICMP"])
+login_attempts = st.number_input("Login Attempts", 2)
+session_duration = st.number_input("Session Duration", 450.0)
+encryption_used = st.selectbox("Encryption", ["DES", "AES", "NaN"])
+ip_reputation_score = st.number_input("IP Score", 0.5)
+failed_logins = st.number_input("Failed Logins", 0)
+browser_type = st.selectbox("Browser", ["Firefox", "Edge", "Chrome"])
+unusual_time_access = st.selectbox("Unusual Time", [0, 1])
+
+if st.button("Predict"):
+    # Create DataFrame
+    input_df = pd.DataFrame([[
+        0, # Placeholder for session_id to match original columns
+        network_packet_size,
+        protocol_type,
+        login_attempts,
+        session_duration,
+        encryption_used,
+        ip_reputation_score,
+        failed_logins,
+        browser_type,
+        unusual_time_access
+    ]], columns=['session_id', 'network_packet_size', 'protocol_type', 
+                 'login_attempts', 'session_duration', 'encryption_used', 
+                 'ip_reputation_score', 'failed_logins', 'browser_type', 
+                 'unusual_time_access'])
+
+    # Encode and scale
+    input_df['protocol_type'] = label_encoders['protocol_type'].transform(input_df['protocol_type'])
+    input_df['encryption_used'] = label_encoders['encryption_used'].transform(input_df['encryption_used'])
+    input_df['browser_type'] = label_encoders['browser_type'].transform(input_df['browser_type'])
+    scaled_data = scaler.transform(input_df)
     
-    src_bytes = st.number_input("Source Bytes", min_value=0)
-    dst_bytes = st.number_input("Destination Bytes", min_value=0)
-
-    submit = st.form_submit_button("Predict")
-
-# Predict on submission
-if submit:
-    # Create input DataFrame
-    input_df = pd.DataFrame([{
-        'duration': duration,
-        'protocol_type': protocol_type,
-        'service': service,
-        'flag': flag,
-        'src_bytes': src_bytes,
-        'dst_bytes': dst_bytes
-    }])
-
-    # Encode categorical columns
-    for col in ['protocol_type', 'service', 'flag']:
-        le = label_encoders[col]
-        input_df[col] = le.transform(input_df[col])
-
-    # Scale numerical features
-    X_scaled = scaler.transform(input_df)
-
-    # Predict
-    prediction = model.predict(X_scaled)
-    result = target_le.inverse_transform(prediction)[0]
-
-    # Show result
-    st.subheader("🔍 Prediction:")
-    if result == "normal":
-        st.success("✅ This is a **normal** network activity.")
+    # Predict and show result
+    prediction = model.predict(scaled_data)[0]
+    
+    if prediction == 1:
+        st.error("Attack Detected")
     else:
-        st.error(f"⚠️ Detected **intrusion**: {result}")
+        st.success("Normal Activity")
